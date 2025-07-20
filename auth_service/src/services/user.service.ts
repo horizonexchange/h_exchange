@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable } from "@nestjs/common";
+import { BadRequestException, Inject, Injectable, InternalServerErrorException } from "@nestjs/common";
 import Redis from "ioredis";
 import { RegisterDto } from "src/dtos/register.dto";
 import { User } from "src/entities/user.entity";
@@ -33,5 +33,25 @@ export class UserService {
         await this.redisClient.set(JSON.stringify(getUserKey), JSON.stringify(inputDto), "EX", 120)
 
         return `We sent a code to your phone number(${inputDto.phoneNumber})`;
+    }
+
+    // in this endpoint, after front-end sent otp and phone number, we validate and check
+    // if there is an active otp for them or not, since otp gets deleted after 2 minutes
+    // then if it exists, we make the user account.
+    async Verify(input: { otp: number, phoneNumber: string }): Promise<any> {
+
+        // raw json user data
+        let value: string | null = await this.redisClient.get(JSON.stringify(input))
+        if (!value) throw new BadRequestException('there is a problem in verifying your otp code');
+
+        // user data will bond to this if the otp exist
+        let userData: RegisterDto = JSON.parse(value);
+
+        const user: User | null = await this.userRepository.createUser(userData);
+        if (!user) throw new InternalServerErrorException('there is a problem in creating your account');
+
+        const { password, ...safeUser } = user;
+
+        return safeUser;
     }
 }
