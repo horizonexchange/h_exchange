@@ -1,5 +1,9 @@
 import { Body, Controller, HttpCode, HttpStatus, Post, UsePipes } from "@nestjs/common";
 import { ApiResponse } from "@nestjs/swagger";
+import { login200Response, login400Response } from "src/docs/login.doc";
+import { register200Response, register400Response } from "src/docs/register.doc";
+import { verify201Response, verify400Response } from "src/docs/verify.doc";
+import { LoginDto } from "src/dtos/login.dto";
 import { RegisterDto } from "src/dtos/register.dto";
 import { VerifyDto } from "src/dtos/verify.dto";
 import { UserExistPipe } from "src/pipes/UserExist.pipe";
@@ -11,24 +15,8 @@ export class UserController {
         private readonly userService: UserService,
     ) {}
 
-    @ApiResponse({
-        status: 200,
-        example: {
-            success: true,
-            result: "We sent a code to your phone number(09123456789)"
-        },
-        description: "registering user and sending OTP endpoint, not creation of the user account"
-    })
-    @ApiResponse({
-        status: 400,
-        example: {
-            message: [
-            "Password must be at least 8 characters long, contain at least one uppercase letter, one lowercase letter, one digit, and one special character."
-            ],
-            error: "Bad Request",
-            statusCode: 400
-        },
-    })
+    @ApiResponse(register200Response)
+    @ApiResponse(register400Response)
     @Post('register')
     @HttpCode(HttpStatus.OK)
     @UsePipes(UserExistPipe)
@@ -41,32 +29,8 @@ export class UserController {
         return { success: true, result };
     }
 
-    @ApiResponse({
-        status: 201,
-        example: {
-            success: true,
-            user: {
-                firstName: "john",
-                lastName: "doe",
-                phoneNumber: "09123456789",
-                createdAt: "2025-07-24T12:27:36.095Z",
-                updatedAt: "2025-07-24T12:27:36.095Z"
-            },
-            tokens: {
-                accessToken: "<access token>",
-                refreshToken: "<refresh token>"
-            },
-        },
-        description: "verifying user with otp and phone number and creation of account"
-    })
-    @ApiResponse({
-        status: 400,
-        example: {
-            message: "there is a problem in verifying your otp code",
-            error: "Bad Request",
-            statusCode: 400
-    }
-    })
+    @ApiResponse(verify201Response)
+    @ApiResponse(verify400Response)
     @Post('verify')
     @HttpCode(HttpStatus.CREATED)
     async Verify( // verifying user with otp and phone number and creation of account
@@ -77,4 +41,18 @@ export class UserController {
 
         return { success: true, user: result.user, tokens: result.tokens };
     }
+
+    @ApiResponse(login200Response)
+    @ApiResponse(login400Response)
+    @Post('login')
+    @HttpCode(HttpStatus.OK)
+    async Login( // user logins, returned data is tokens
+        @Body() input: LoginDto,
+    ): Promise<any> {
+
+        const result = await this.userService.Login(input);
+
+        return { success: true, accessToken: result.accessToken, refreshToken: result.refreshToken };
+    }
+
 }

@@ -1,4 +1,3 @@
-import { ApiProperty } from "@nestjs/swagger";
 import { IsNotEmpty, IsString, Length, Matches } from "class-validator";
 
 export class RegisterDto {
@@ -26,7 +25,7 @@ export class RegisterDto {
     @Length(11, 11, { message: "Phone number length is just 11" })
     @IsNotEmpty({ message: "Phone number is required" })
     phoneNumber: string;
-    
+
     @IsString({ message: "Password must be a string" })
     @Length(3, 30, { message: "Password length is from 8 to 50" })
     @IsNotEmpty({ message: "Password is required" })

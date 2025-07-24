@@ -1,12 +1,14 @@
 import { BadRequestException, Inject, Injectable, InternalServerErrorException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
 import Redis from "ioredis";
+import { LoginDto } from "src/dtos/login.dto";
 import { RegisterDto } from "src/dtos/register.dto";
 import { VerifyDto } from "src/dtos/verify.dto";
 import { User } from "src/entities/user.entity";
 import { UsersRole } from "src/enums/roles.enum";
 import { sendOtp } from "src/helpers/send_otp.helper";
 import { UserRepository } from "src/repositories/user.repository";
+import * as bcrypt from "bcrypt";
 
 @Injectable()
 export class UserService {
@@ -54,7 +56,7 @@ export class UserService {
         if (!user) throw new InternalServerErrorException('there is a problem in creating your account');
 
         await this.redisClient.del(input.otp_and_phone);
-        
+
         const accessToken: string = this.jwtService.sign(
             {
                 user_id: user.id,
@@ -81,10 +83,48 @@ export class UserService {
         return { // created users and tokens are the response
             user: safeUser,
             tokens: {
-                accessToken: accessToken,
-                refreshToken: refreshToken
+                accessToken,
+                refreshToken
             }
         };
 
     }
+
+    async Login(input: LoginDto): Promise<any> { // Login service method, returns the tokens
+
+        const isUserExist: User | null = await this.userRepository.findOnPhone(input.phoneNumber);
+
+        if (!isUserExist) throw new BadRequestException('there is a problem in registering the user');
+
+        const hashedPassword: string = await bcrypt.hash(input.password, 10);
+        const isPasswordMatch: boolean = await bcrypt.compare(hashedPassword, isUserExist.password);
+        if (!isPasswordMatch) throw new BadRequestException("wrong phone number or password");
+
+        const accessToken: string = this.jwtService.sign(
+            {
+                user_id: isUserExist.id,
+                role: UsersRole.normal
+            },
+            {
+                expiresIn: "15m",
+                secret: process.env.JWT_ACCESS_SECRET
+            }
+        )
+        
+        const { password, ...safeUser } = isUserExist;
+
+        const refreshToken: string = this.jwtService.sign(
+            {
+                user_id: isUserExist.id,
+                role: UsersRole.normal
+            },
+            {
+                expiresIn: "90d",
+                secret: process.env.JWT_REFRESH_SECRET,
+            }
+        )
+
+        return { accessToken, refreshToken }
+    }
+
 }
