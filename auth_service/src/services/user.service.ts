@@ -1,7 +1,10 @@
 import { BadRequestException, Inject, Injectable, InternalServerErrorException } from "@nestjs/common";
+import { JwtService } from "@nestjs/jwt";
 import Redis from "ioredis";
 import { RegisterDto } from "src/dtos/register.dto";
+import { VerifyDto } from "src/dtos/verify.dto";
 import { User } from "src/entities/user.entity";
+import { UsersRole } from "src/enums/roles.enum";
 import { sendOtp } from "src/helpers/send_otp.helper";
 import { UserRepository } from "src/repositories/user.repository";
 
@@ -10,6 +13,7 @@ export class UserService {
     constructor(
         private readonly userRepository: UserRepository,
         @Inject("REDIS_CLIENT") private readonly redisClient: Redis,
+        private readonly jwtService: JwtService,
     ) {}
 
     // in this endpoint we send the otp code to user, that expires 2 minutes later.
@@ -23,14 +27,13 @@ export class UserService {
         const otpCode: number = sendOtp(inputDto.phoneNumber); // sends the otp, returns the otp code
 
         // front-end should send an object like this:
-        // { otp: 246342, phone: 09120000000 } then if otp is valid, the user will be created
-        const getUserKey = { 
-            otp: otpCode,
-            phone: inputDto.phoneNumber
-        };
+        // { otp_and_phone: 09100000000:642349 } then if otp is valid, the user will be created
+        const getUserKey: string = inputDto.phoneNumber.concat(":", String(otpCode))
+
+        console.log(getUserKey);
 
         // two minutes expiration time
-        await this.redisClient.set(JSON.stringify(getUserKey), JSON.stringify(inputDto), "EX", 120)
+        await this.redisClient.set(getUserKey, JSON.stringify(inputDto), "EX", 120)
 
         return `We sent a code to your phone number(${inputDto.phoneNumber})`;
     }
@@ -38,10 +41,10 @@ export class UserService {
     // in this endpoint, after front-end sent otp and phone number, we validate and check
     // if there is an active otp for them or not, since otp gets deleted after 2 minutes
     // then if it exists, we make the user account.
-    async Verify(input: { otp: number, phoneNumber: string }): Promise<any> {
+    async Verify(input: VerifyDto): Promise<any> {
 
         // raw json user data
-        let value: string | null = await this.redisClient.get(JSON.stringify(input))
+        let value: string | null = await this.redisClient.get(input.otp_and_phone)
         if (!value) throw new BadRequestException('there is a problem in verifying your otp code');
 
         // user data will bond to this if the otp exist
@@ -50,8 +53,38 @@ export class UserService {
         const user: User | null = await this.userRepository.createUser(userData);
         if (!user) throw new InternalServerErrorException('there is a problem in creating your account');
 
+        await this.redisClient.del(input.otp_and_phone);
+        
+        const accessToken: string = this.jwtService.sign(
+            {
+                user_id: user.id,
+                role: UsersRole.normal
+            },
+            {
+                expiresIn: "15m",
+                secret: process.env.JWT_ACCESS_SECRET
+            }
+        )
         const { password, ...safeUser } = user;
 
-        return safeUser;
+        const refreshToken: string = this.jwtService.sign(
+            {
+                user_id: user.id,
+                role: UsersRole.normal
+            },
+            {
+                expiresIn: "90d",
+                secret: process.env.JWT_REFRESH_SECRET,
+            }
+        )
+
+        return { // created users and tokens are the response
+            user: safeUser,
+            tokens: {
+                accessToken: accessToken,
+                refreshToken: refreshToken
+            }
+        };
+
     }
 }

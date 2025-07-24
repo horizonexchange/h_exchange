@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from './entities/user.entity';
 import { RedisModule } from './modules/redis.module';
 import { UserModule } from './modules/user.module';
 

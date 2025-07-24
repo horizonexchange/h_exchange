@@ -1,12 +1,14 @@
 import { Injectable } from "@nestjs/common";
 import { RegisterDto } from "src/dtos/register.dto";
-import { User } from "src/entities/user.entity";
 import { Repository } from "typeorm";
 import * as bcrypt from "bcrypt";
+import { User } from "src/entities/user.entity";
+import { InjectRepository } from "@nestjs/typeorm";
 
 @Injectable()
 export class UserRepository {
     constructor(
+        @InjectRepository(User)
         private readonly ormUserRepo: Repository<User>,
     ) {}
 
@@ -32,7 +34,7 @@ export class UserRepository {
         user.createdAt = new Date();
         user.updatedAt = new Date();
 
-        this.ormUserRepo.create(user);
+        this.ormUserRepo.save(user);
 
         return user;
     }

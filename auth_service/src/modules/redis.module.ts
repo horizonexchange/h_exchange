@@ -5,7 +5,7 @@ const redisProvider: Provider = {
   useFactory: () => {
     return new Redis({
       port: 6379,
-      host: '127.0.0.1',
+      host: 'localhost',
       username: 'default',
       password: '12345678',
       db: 0,
